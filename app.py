@@ -13,7 +13,7 @@ import streamlit as st
 import yaml
 
 
-BACKEND_URL = "http://localhost:8000"
+BACKEND_URL = st.secrets.get("BACKEND_URL", "http://localhost:8000")
 CACHE_DIR = Path("data")
 
 SPINNER_MESSAGES = [
