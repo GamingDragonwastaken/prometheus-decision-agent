@@ -1,0 +1,12 @@
+scenarios:
+  - id: openai_market_entry
+    label: "Should I compete with OpenAI in enterprise AI?"
+    question: "Should I compete with OpenAI in the enterprise AI market in 2026, or find a different niche? What is the real risk of going head-to-head with them?"
+
+  - id: salesforce_vs_hubspot_italy
+    label: "Salesforce or HubSpot for Italian mid-market?"
+    question: "Should an Italian mid-market company (50-500 employees) choose Salesforce or HubSpot as their CRM — and what is the real risk of getting this decision wrong?"
+
+  - id: tesla_threat_europe
+    label: "Is Tesla an existential threat to European automakers?"
+    question: "Should a European automotive executive treat Tesla as an existential threat in 2026, or is this competitor manageable? What should they do in the next 12 months?"
