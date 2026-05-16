@@ -164,19 +164,129 @@ st.markdown(
         }
 
         .agent-panel {
-            border-radius: 8px;
-            padding: 16px;
+            border-radius: 10px;
+            padding: 22px 26px;
             border: 2px solid;
             background: rgba(12, 12, 13, 0.75) !important;
             backdrop-filter: blur(16px) saturate(180%);
             -webkit-backdrop-filter: blur(16px) saturate(180%);
-            min-height: 360px;
-            height: 100%;
             box-shadow:
                 0 0 0 1px rgba(255, 255, 255, 0.04),
-                0 4px 32px rgba(0, 0, 0, 0.5),
+                0 6px 36px rgba(0, 0, 0, 0.45),
                 inset 0 1px 0 rgba(255, 255, 255, 0.03) !important;
-            transition: box-shadow 0.2s ease, transform 0.2s ease;
+            transition: box-shadow 0.25s ease, transform 0.25s ease;
+        }
+
+        .agent-row {
+            display: grid;
+            grid-template-columns: 56px 1fr auto;
+            align-items: center;
+            gap: 18px;
+            margin-bottom: 14px;
+        }
+
+        .agent-index {
+            font-family: "JetBrains Mono", monospace;
+            font-size: 2.4rem;
+            font-weight: 700;
+            line-height: 1;
+            letter-spacing: -0.02em;
+            color: rgba(255, 255, 255, 0.10);
+            text-align: left;
+        }
+
+        .agent-index.scout       { color: rgba(59, 130, 246, 0.22); }
+        .agent-index.challenger  { color: rgba(249, 115, 22, 0.22); }
+        .agent-index.strategist  { color: rgba(34, 197, 94, 0.22); }
+        .agent-index.decision-gate { color: rgba(168, 85, 247, 0.22); }
+
+        .agent-meta { display: flex; flex-direction: column; gap: 2px; }
+        .agent-name {
+            font-size: 1.15rem;
+            font-weight: 800;
+            letter-spacing: 0.4px;
+            line-height: 1.15;
+        }
+        .agent-name.scout       { color: #3B82F6; }
+        .agent-name.challenger  { color: #F97316; }
+        .agent-name.strategist  { color: #22C55E; }
+        .agent-name.decision-gate { color: #A855F7; }
+
+        .agent-sub {
+            color: #A3A3A3;
+            font-size: 0.82rem;
+            letter-spacing: 0.3px;
+        }
+
+        .pipeline-connector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            margin: 14px 0;
+        }
+
+        .pipeline-arrow {
+            width: 2px;
+            height: 30px;
+            border-radius: 1px;
+            background: linear-gradient(
+                180deg,
+                rgba(245, 158, 11, 0.0) 0%,
+                rgba(245, 158, 11, 0.55) 45%,
+                rgba(245, 158, 11, 0.55) 55%,
+                rgba(245, 158, 11, 0.0) 100%
+            );
+        }
+
+        .pipeline-arrow::after {
+            content: "";
+            display: block;
+            width: 0;
+            height: 0;
+            margin: -1px auto 0;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 5px solid rgba(245, 158, 11, 0.55);
+            transform: translateY(2px);
+        }
+
+        .pipeline-label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: rgba(245, 158, 11, 0.75);
+        }
+
+        .pipeline-label .pipe-faded {
+            color: rgba(255, 255, 255, 0.35);
+            font-weight: 600;
+        }
+
+        .exchange-callout {
+            margin: 18px 0;
+            padding: 20px 24px 8px;
+            border-radius: 10px;
+            background: rgba(20, 20, 22, 0.55);
+            border: 1px dashed rgba(245, 158, 11, 0.22);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+
+        .exchange-callout-title {
+            font-size: 0.78rem;
+            font-weight: 800;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: rgba(245, 158, 11, 0.9);
+            margin-bottom: 2px;
+        }
+
+        .exchange-callout-sub {
+            color: #A3A3A3;
+            font-size: 0.86rem;
+            margin-bottom: 10px;
         }
 
         .agent-panel.scout { border-color: #3B82F6; }
@@ -286,16 +396,16 @@ st.markdown(
         }
 
         .panel-output {
-            max-height: 300px;
+            max-height: 460px;
             overflow-y: auto;
-            padding: 12px;
+            padding: 16px 18px;
             border-radius: 6px !important;
             background: rgba(7, 7, 8, 0.8) !important;
             border: 1px solid rgba(255, 255, 255, 0.05) !important;
             color: #D4D4D4;
-            font-size: 0.9rem;
-            line-height: 1.55;
-            min-height: 214px;
+            font-size: 0.92rem;
+            line-height: 1.6;
+            min-height: 96px;
             scrollbar-width: thin;
             scrollbar-color: rgba(245, 158, 11, 0.25) transparent;
         }
@@ -374,15 +484,20 @@ st.markdown(
 
         .decision-rationale {
             color: #E5E5E5;
-            max-width: 960px;
+            max-width: 760px;
             margin: 0 auto 18px;
             line-height: 1.65;
+            text-align: left;
         }
 
         .decision-condition {
             color: #BDBDBD;
             margin-top: 8px;
             font-size: 0.95rem;
+            max-width: 760px;
+            margin-left: auto;
+            margin-right: auto;
+            text-align: left;
         }
 
         .threat-score {
@@ -599,6 +714,14 @@ def agent_header(agent_name: str, output_text: str) -> str:
     return f"{'✅' if output_text else '⬜'} {agent_name}"
 
 
+AGENT_INDEX = {
+    "scout": "01",
+    "challenger": "02",
+    "strategist": "03",
+    "decision-gate": "04",
+}
+
+
 def render_agent_panel(
     placeholder,
     kind: str,
@@ -610,16 +733,45 @@ def render_agent_panel(
 ) -> None:
     output = output_text.strip() if output_text else "Waiting for analysis output."
     output_class = "panel-output" if output_text else "panel-output empty-output"
-    title = agent_header(agent_name, output_text)
+    index_label = AGENT_INDEX.get(kind, "")
+    completion_mark = "✓" if output_text else "○"
     placeholder.markdown(
         f"""
         <div class="agent-panel {kind}">
-            <div class="agent-header">
-                <div class="agent-title {kind}">{title}</div>
+            <div class="agent-row">
+                <div class="agent-index {kind}">{index_label}</div>
+                <div class="agent-meta">
+                    <div class="agent-name {kind}">{completion_mark} &nbsp; {agent_name}</div>
+                    <div class="agent-sub">{caption}</div>
+                </div>
                 <span class="status-badge {status_class}">{status_label}</span>
             </div>
-            <div class="agent-caption">{caption}</div>
             <div class="{output_class}">{markdown_to_panel_html(output)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+PIPELINE_CONNECTORS = {
+    "scout-to-challenger": ("Scout's claims", "Challenger objects"),
+    "challenger-to-disagree": ("Challenger's objections", "Disagreements surfaced"),
+    "disagree-to-strategist": ("Resolved disagreements", "Strategist synthesizes"),
+    "strategist-to-decision": ("Strategist's brief", "Decision Gate rules"),
+}
+
+
+def render_pipeline_connector(placeholder, key: str) -> None:
+    from_label, to_label = PIPELINE_CONNECTORS[key]
+    placeholder.markdown(
+        f"""
+        <div class="pipeline-connector">
+            <div class="pipeline-label">
+                <span class="pipe-faded">{html.escape(from_label)}</span>
+                &nbsp;&nbsp;→&nbsp;&nbsp;
+                {html.escape(to_label)}
+            </div>
+            <div class="pipeline-arrow"></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -726,8 +878,15 @@ def decision_colors(decision: str) -> tuple[str, str, str]:
 
 def render_disagreement_table(placeholder, result: dict) -> None:
     with placeholder.container():
-        st.markdown("### ⚔️ Where They Disagreed")
-        st.caption("Scout's claim → Challenger's objection → Strategist's resolution")
+        st.markdown(
+            """
+            <div class="exchange-callout">
+                <div class="exchange-callout-title">⚔ Disagreement Exchange</div>
+                <div class="exchange-callout-sub">Scout's claim → Challenger's objection → Strategist's resolution</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         disagreement_rows = [
             {
                 "Scout claimed": row["scout_claim"],
@@ -737,6 +896,18 @@ def render_disagreement_table(placeholder, result: dict) -> None:
             for row in result["disagreements"]
         ]
         st.dataframe(disagreement_rows, use_container_width=True, hide_index=True)
+
+
+def render_disagreement_placeholder(placeholder) -> None:
+    placeholder.markdown(
+        """
+        <div class="exchange-callout">
+            <div class="exchange-callout-title">⚔ Disagreement Exchange</div>
+            <div class="exchange-callout-sub">Awaiting Challenger's objections to surface here</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_decision_card(placeholder, result: dict) -> None:
@@ -852,6 +1023,10 @@ def progressive_display(
     )
     time.sleep(0.4)
 
+    st.session_state.disagreements = result["disagreements"]
+    render_disagreement_table(disagreement_placeholder, result)
+    time.sleep(0.4)
+
     st.session_state.strategist_text = format_strategist_output(result["strategy"])
     render_agent_panel(
         strategist_placeholder,
@@ -862,10 +1037,6 @@ def progressive_display(
         "status-strategist",
         st.session_state.strategist_text,
     )
-    time.sleep(0.4)
-
-    st.session_state.disagreements = result["disagreements"]
-    render_disagreement_table(disagreement_placeholder, result)
     time.sleep(0.4)
 
     st.session_state.decision_text = format_decision_output(result["decision"])
@@ -1020,20 +1191,23 @@ if st.session_state.cache_notice:
 
 st.divider()
 
-panel_1, panel_2, panel_3, panel_4 = st.columns([1, 1, 1, 1])
-with panel_1:
-    scout_placeholder = st.empty()
-with panel_2:
-    challenger_placeholder = st.empty()
-with panel_3:
-    strategist_placeholder = st.empty()
-with panel_4:
-    decision_placeholder = st.empty()
-
+scout_placeholder = st.empty()
+connector_scout_to_challenger = st.empty()
+challenger_placeholder = st.empty()
+connector_challenger_to_disagree = st.empty()
 disagreement_placeholder = st.empty()
+connector_disagree_to_strategist = st.empty()
+strategist_placeholder = st.empty()
+connector_strategist_to_decision = st.empty()
+decision_placeholder = st.empty()
 verdict_placeholder = st.empty()
 strategic_brief_placeholder = st.empty()
 spinner_placeholder = st.empty()
+
+render_pipeline_connector(connector_scout_to_challenger, "scout-to-challenger")
+render_pipeline_connector(connector_challenger_to_disagree, "challenger-to-disagree")
+render_pipeline_connector(connector_disagree_to_strategist, "disagree-to-strategist")
+render_pipeline_connector(connector_strategist_to_decision, "strategist-to-decision")
 
 if pending_action:
     render_all_agent_panels(
@@ -1048,6 +1222,7 @@ if pending_action:
             "decision": ("● Running", "status-running"),
         },
     )
+    render_disagreement_placeholder(disagreement_placeholder)
 else:
     status = ("✅ Complete", "status-complete") if st.session_state.final_result else ("● Idle", "status-idle")
     render_all_agent_panels(
@@ -1062,6 +1237,8 @@ else:
             "decision": status if st.session_state.final_result else ("● Idle", "status-idle"),
         },
     )
+    if not st.session_state.final_result:
+        render_disagreement_placeholder(disagreement_placeholder)
 
 if pending_action == "live":
     try:
