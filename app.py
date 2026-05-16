@@ -200,17 +200,36 @@ st.markdown(
         .agent-index.strategist  { color: rgba(34, 197, 94, 0.22); }
         .agent-index.decision-gate { color: rgba(168, 85, 247, 0.22); }
 
-        .agent-meta { display: flex; flex-direction: column; gap: 2px; }
+        .agent-meta { display: flex; flex-direction: column; gap: 4px; }
         .agent-name {
             font-size: 1.15rem;
             font-weight: 800;
             letter-spacing: 0.4px;
             line-height: 1.15;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
         }
         .agent-name.scout       { color: #3B82F6; }
         .agent-name.challenger  { color: #F97316; }
         .agent-name.strategist  { color: #22C55E; }
         .agent-name.decision-gate { color: #A855F7; }
+
+        .agent-icon-wrap {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.025);
+            box-shadow:
+                inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+                inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        }
+
+        .agent-icon { display: block; }
+        .agent-name-text { display: inline-block; }
 
         .agent-sub {
             color: #A3A3A3;
@@ -227,28 +246,8 @@ st.markdown(
         }
 
         .pipeline-arrow {
-            width: 2px;
-            height: 30px;
-            border-radius: 1px;
-            background: linear-gradient(
-                180deg,
-                rgba(245, 158, 11, 0.0) 0%,
-                rgba(245, 158, 11, 0.55) 45%,
-                rgba(245, 158, 11, 0.55) 55%,
-                rgba(245, 158, 11, 0.0) 100%
-            );
-        }
-
-        .pipeline-arrow::after {
-            content: "";
             display: block;
-            width: 0;
-            height: 0;
-            margin: -1px auto 0;
-            border-left: 4px solid transparent;
-            border-right: 4px solid transparent;
-            border-top: 5px solid rgba(245, 158, 11, 0.55);
-            transform: translateY(2px);
+            opacity: 0.85;
         }
 
         .pipeline-label {
@@ -281,7 +280,12 @@ st.markdown(
             text-transform: uppercase;
             color: rgba(245, 158, 11, 0.9);
             margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
+
+        .exchange-icon { display: inline-block; }
 
         .exchange-callout-sub {
             color: #A3A3A3;
@@ -484,20 +488,20 @@ st.markdown(
 
         .decision-rationale {
             color: #E5E5E5;
-            max-width: 760px;
+            max-width: 820px;
             margin: 0 auto 18px;
             line-height: 1.65;
-            text-align: left;
+            text-align: center;
         }
 
         .decision-condition {
             color: #BDBDBD;
             margin-top: 8px;
             font-size: 0.95rem;
-            max-width: 760px;
+            max-width: 820px;
             margin-left: auto;
             margin-right: auto;
-            text-align: left;
+            text-align: center;
         }
 
         .threat-score {
@@ -722,6 +726,55 @@ AGENT_INDEX = {
 }
 
 
+AGENT_ICONS = {
+    "scout": (
+        '<svg class="agent-icon scout" width="16" height="16" viewBox="0 0 16 16" '
+        'fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+        '<circle cx="8" cy="8" r="1.6" fill="currentColor"/>'
+        '<circle cx="8" cy="8" r="4.2" stroke="currentColor" stroke-width="1.3" opacity="0.7"/>'
+        '<circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.1" opacity="0.35"/>'
+        '<line x1="8" y1="8" x2="13.5" y2="3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.9"/>'
+        "</svg>"
+    ),
+    "challenger": (
+        '<svg class="agent-icon challenger" width="16" height="16" viewBox="0 0 16 16" '
+        'fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+        '<circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/>'
+        '<circle cx="8" cy="8" r="2.2" stroke="currentColor" stroke-width="1.3" fill="currentColor" fill-opacity="0.18"/>'
+        '<line x1="8" y1="0.5" x2="8" y2="3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>'
+        '<line x1="8" y1="13" x2="8" y2="15.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>'
+        '<line x1="0.5" y1="8" x2="3" y2="8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>'
+        '<line x1="13" y1="8" x2="15.5" y2="8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>'
+        "</svg>"
+    ),
+    "strategist": (
+        '<svg class="agent-icon strategist" width="16" height="16" viewBox="0 0 16 16" '
+        'fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+        '<path d="M2.5 2.5 L8 8 L8 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'
+        '<path d="M13.5 2.5 L8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'
+        '<circle cx="2.5" cy="2.5" r="1.4" fill="currentColor"/>'
+        '<circle cx="13.5" cy="2.5" r="1.4" fill="currentColor"/>'
+        '<circle cx="8" cy="14" r="1.4" fill="currentColor"/>'
+        "</svg>"
+    ),
+    "decision-gate": (
+        '<svg class="agent-icon decision-gate" width="16" height="16" viewBox="0 0 16 16" '
+        'fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+        '<line x1="3.5" y1="1.5" x2="3.5" y2="14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>'
+        '<path d="M3.5 2.5 L13 4 L9 6.5 L13 9 L3.5 7.5 Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round" fill="currentColor" fill-opacity="0.22"/>'
+        "</svg>"
+    ),
+}
+
+
+AGENT_CAPTIONS = {
+    "scout": "Scans the open web for verifiable signals",
+    "challenger": "Probes claims for hidden flaws",
+    "strategist": "Synthesizes both sides into action",
+    "decision-gate": "Rules on the question",
+}
+
+
 def render_agent_panel(
     placeholder,
     kind: str,
@@ -734,15 +787,19 @@ def render_agent_panel(
     output = output_text.strip() if output_text else "Waiting for analysis output."
     output_class = "panel-output" if output_text else "panel-output empty-output"
     index_label = AGENT_INDEX.get(kind, "")
-    completion_mark = "✓" if output_text else "○"
+    icon_svg = AGENT_ICONS.get(kind, "")
+    resolved_caption = AGENT_CAPTIONS.get(kind, caption)
     placeholder.markdown(
         f"""
         <div class="agent-panel {kind}">
             <div class="agent-row">
                 <div class="agent-index {kind}">{index_label}</div>
                 <div class="agent-meta">
-                    <div class="agent-name {kind}">{completion_mark} &nbsp; {agent_name}</div>
-                    <div class="agent-sub">{caption}</div>
+                    <div class="agent-name {kind}">
+                        <span class="agent-icon-wrap">{icon_svg}</span>
+                        <span class="agent-name-text">{agent_name}</span>
+                    </div>
+                    <div class="agent-sub">{resolved_caption}</div>
                 </div>
                 <span class="status-badge {status_class}">{status_label}</span>
             </div>
@@ -761,6 +818,17 @@ PIPELINE_CONNECTORS = {
 }
 
 
+PIPELINE_ARROW_SVG = (
+    '<svg class="pipeline-arrow" width="18" height="40" viewBox="0 0 18 40" '
+    'fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+    '<line x1="9" y1="2" x2="9" y2="28" stroke="rgba(245,158,11,0.55)" '
+    'stroke-width="1.5" stroke-linecap="round"/>'
+    '<path d="M3 25 L9 35 L15 25" stroke="rgba(245,158,11,0.78)" '
+    'stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+    "</svg>"
+)
+
+
 def render_pipeline_connector(placeholder, key: str) -> None:
     from_label, to_label = PIPELINE_CONNECTORS[key]
     placeholder.markdown(
@@ -771,7 +839,7 @@ def render_pipeline_connector(placeholder, key: str) -> None:
                 &nbsp;&nbsp;→&nbsp;&nbsp;
                 {html.escape(to_label)}
             </div>
-            <div class="pipeline-arrow"></div>
+            {PIPELINE_ARROW_SVG}
         </div>
         """,
         unsafe_allow_html=True,
@@ -881,7 +949,7 @@ def render_disagreement_table(placeholder, result: dict) -> None:
         st.markdown(
             """
             <div class="exchange-callout">
-                <div class="exchange-callout-title">⚔ Disagreement Exchange</div>
+                <div class="exchange-callout-title"><svg class="exchange-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="2.5" y1="2.5" x2="11.5" y2="11.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="11.5" y1="2.5" x2="2.5" y2="11.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Disagreement Exchange</div>
                 <div class="exchange-callout-sub">Scout's claim → Challenger's objection → Strategist's resolution</div>
             </div>
             """,
@@ -902,7 +970,7 @@ def render_disagreement_placeholder(placeholder) -> None:
     placeholder.markdown(
         """
         <div class="exchange-callout">
-            <div class="exchange-callout-title">⚔ Disagreement Exchange</div>
+            <div class="exchange-callout-title"><svg class="exchange-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="2.5" y1="2.5" x2="11.5" y2="11.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="11.5" y1="2.5" x2="2.5" y2="11.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Disagreement Exchange</div>
             <div class="exchange-callout-sub">Awaiting Challenger's objections to surface here</div>
         </div>
         """,
@@ -937,7 +1005,7 @@ def render_strategic_brief(placeholder, result: dict) -> None:
     threat_pct = max(0, min(100, int(strategy["threat_score"]) * 10))
     opportunity_pct = max(0, min(100, int(strategy["opportunity_score"]) * 10))
     with placeholder.container():
-        with st.expander("📊 Full Strategic Brief", expanded=True):
+        with st.expander("Full Strategic Brief", expanded=True):
             left, right = st.columns(2)
             with left:
                 st.markdown(
@@ -1005,7 +1073,7 @@ def progressive_display(
         "scout",
         "Scout",
         "Live web research via Google Search",
-        "✅ Complete",
+        "✓ Complete",
         "status-scout",
         st.session_state.scout_text,
     )
@@ -1017,7 +1085,7 @@ def progressive_display(
         "challenger",
         "Challenger",
         "Adversarial critique",
-        "✅ Complete",
+        "✓ Complete",
         "status-challenger",
         st.session_state.challenger_text,
     )
@@ -1033,7 +1101,7 @@ def progressive_display(
         "strategist",
         "Strategist",
         "Calibrated synthesis",
-        "✅ Complete",
+        "✓ Complete",
         "status-strategist",
         st.session_state.strategist_text,
     )
@@ -1045,7 +1113,7 @@ def progressive_display(
         "decision-gate",
         "Decision Gate",
         "Autonomous decision",
-        "✅ Complete",
+        "✓ Complete",
         "status-decision",
         st.session_state.decision_text,
     )
@@ -1142,7 +1210,7 @@ selected_scenario_data = scenario_by_label.get(selected_scenario)
 cache_clicked = False
 if selected_scenario_data:
     cache_clicked = st.button(
-        "⚡ Load cached result (instant)",
+        "Load cached result · instant",
         disabled=st.session_state.analysis_running,
         use_container_width=True,
     )
@@ -1155,7 +1223,7 @@ st.text_area(
 )
 
 run_clicked = st.button(
-    "⚡ Run Analysis",
+    "Run Analysis",
     type="primary",
     disabled=st.session_state.analysis_running,
     use_container_width=True,
@@ -1224,7 +1292,7 @@ if pending_action:
     )
     render_disagreement_placeholder(disagreement_placeholder)
 else:
-    status = ("✅ Complete", "status-complete") if st.session_state.final_result else ("● Idle", "status-idle")
+    status = ("✓ Complete", "status-complete") if st.session_state.final_result else ("● Idle", "status-idle")
     render_all_agent_panels(
         scout_placeholder,
         challenger_placeholder,
@@ -1279,7 +1347,7 @@ elif st.session_state.final_result:
 
 
 st.divider()
-with st.expander("📋 Analysis History", expanded=False):
+with st.expander("Analysis History", expanded=False):
     history_rows = fetch_history()
     if history_rows:
         table_rows = [
