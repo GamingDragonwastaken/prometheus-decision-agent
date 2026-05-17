@@ -349,6 +349,115 @@ st.markdown(
             font-weight: 600;
         }
 
+        .calibration-panel {
+            margin: 28px auto 0;
+            max-width: 760px;
+            padding: 18px 22px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.025);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+            text-align: left;
+        }
+
+        .calibration-header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .calibration-title {
+            font-size: 0.74rem;
+            font-weight: 800;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--calib-accent, #F59E0B);
+        }
+
+        .calibration-sub {
+            font-size: 0.78rem;
+            color: #9CA3AF;
+            font-weight: 500;
+        }
+
+        .calibration-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px 10px;
+            padding: 6px 0 10px;
+        }
+
+        .calibration-cell {
+            flex: 1 1 100px;
+            min-width: 88px;
+            padding: 8px 10px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            text-align: center;
+        }
+
+        .calibration-cell-result {
+            background: rgba(var(--calib-accent-rgb, 245, 158, 11), 0.08);
+            border-color: rgba(var(--calib-accent-rgb, 245, 158, 11), 0.22);
+        }
+
+        .calibration-cell-value {
+            font-family: "JetBrains Mono", monospace;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #FFFFFF;
+            line-height: 1.1;
+        }
+
+        .calibration-cell-label {
+            font-size: 0.7rem;
+            color: #9CA3AF;
+            margin-top: 4px;
+            letter-spacing: 0.04em;
+        }
+
+        .calibration-op {
+            font-family: "JetBrains Mono", monospace;
+            font-size: 1rem;
+            color: #525252;
+            font-weight: 700;
+        }
+
+        .calibration-footer {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            padding-top: 10px;
+            border-top: 1px dashed rgba(255, 255, 255, 0.06);
+            font-size: 0.84rem;
+        }
+
+        .calibration-llm-label {
+            color: #9CA3AF;
+            letter-spacing: 0.03em;
+        }
+
+        .calibration-llm-value {
+            font-family: "JetBrains Mono", monospace;
+            font-weight: 700;
+            color: var(--calib-accent, #F59E0B);
+        }
+
+        .calibration-delta {
+            margin-left: auto;
+            font-weight: 600;
+            font-size: 0.78rem;
+            letter-spacing: 0.02em;
+        }
+
+        .calib-delta-match { color: #22C55E; }
+        .calib-delta-close { color: #9CA3AF; }
+        .calib-delta-far   { color: #F59E0B; }
+
         .exchange-callout-sub {
             color: #A3A3A3;
             font-size: 0.86rem;
@@ -1100,10 +1209,107 @@ def render_disagreement_placeholder(placeholder) -> None:
     )
 
 
+def compute_calibration_breakdown(result: dict) -> dict:
+    """Derive a deterministic confidence from agent outputs.
+
+    Mirrors the Decision Gate system prompt's calibration rules so the math
+    is visible to the user. We start at a base of 90 (matching the prompt's
+    "minor objections all resolved" ceiling), penalise per unresolved
+    Challenger gap, and apply a smaller penalty per raised gap that was
+    later resolved by Strategist. We never exceed 92 — the prompt's hard
+    ceiling — because no business decision has perfect information.
+    """
+    critique = result.get("critique") or {}
+    disagreements = result.get("disagreements") or []
+
+    gaps_raised = len(critique.get("gaps_identified") or [])
+    assumptions_raised = len(critique.get("assumptions_challenged") or [])
+    total_raised = gaps_raised + assumptions_raised
+    resolved = sum(
+        1
+        for row in disagreements
+        if (row.get("strategist_resolution") or "").strip()
+        and "malformed" not in (row.get("strategist_resolution") or "").lower()
+    )
+    unresolved = max(0, total_raised - resolved)
+
+    base = 90
+    unresolved_penalty = unresolved * 8
+    resolved_penalty = resolved * 2
+    deterministic = max(35, min(92, base - unresolved_penalty - resolved_penalty))
+
+    llm_confidence = int(result.get("decision", {}).get("confidence_pct") or 0)
+    delta = llm_confidence - deterministic
+
+    return {
+        "base": base,
+        "raised": total_raised,
+        "resolved": resolved,
+        "unresolved": unresolved,
+        "unresolved_penalty": unresolved_penalty,
+        "resolved_penalty": resolved_penalty,
+        "deterministic": deterministic,
+        "llm": llm_confidence,
+        "delta": delta,
+    }
+
+
+def render_calibration_panel_html(breakdown: dict, accent_color: str) -> str:
+    """Render the calibration disclosure inline under the verdict card."""
+    delta = breakdown["delta"]
+    if delta == 0:
+        delta_phrase = "matches"
+        delta_class = "calib-delta-match"
+    elif abs(delta) <= 5:
+        delta_phrase = f"within {abs(delta)}% of"
+        delta_class = "calib-delta-close"
+    else:
+        sign = "above" if delta > 0 else "below"
+        delta_phrase = f"{abs(delta)}% {sign}"
+        delta_class = "calib-delta-far"
+
+    return f"""
+    <div class="calibration-panel" style="--calib-accent: {accent_color};">
+        <div class="calibration-header">
+            <span class="calibration-title">Confidence Calibration</span>
+            <span class="calibration-sub">how the {breakdown["llm"]}% was earned</span>
+        </div>
+        <div class="calibration-row">
+            <div class="calibration-cell">
+                <div class="calibration-cell-value">{breakdown["base"]}%</div>
+                <div class="calibration-cell-label">Base ceiling</div>
+            </div>
+            <div class="calibration-op">−</div>
+            <div class="calibration-cell">
+                <div class="calibration-cell-value">{breakdown["unresolved_penalty"]}%</div>
+                <div class="calibration-cell-label">{breakdown["unresolved"]} unresolved · 8% each</div>
+            </div>
+            <div class="calibration-op">−</div>
+            <div class="calibration-cell">
+                <div class="calibration-cell-value">{breakdown["resolved_penalty"]}%</div>
+                <div class="calibration-cell-label">{breakdown["resolved"]} resolved · 2% each</div>
+            </div>
+            <div class="calibration-op">=</div>
+            <div class="calibration-cell calibration-cell-result">
+                <div class="calibration-cell-value">{breakdown["deterministic"]}%</div>
+                <div class="calibration-cell-label">Deterministic</div>
+            </div>
+        </div>
+        <div class="calibration-footer">
+            <span class="calibration-llm-label">LLM said:</span>
+            <span class="calibration-llm-value">{breakdown["llm"]}%</span>
+            <span class="calibration-delta {delta_class}">{delta_phrase} deterministic</span>
+        </div>
+    </div>
+    """
+
+
 def render_decision_card(placeholder, result: dict) -> None:
     decision = result["decision"]
     border_color, text_color, glow = decision_colors(decision["decision"])
     confidence = max(0, min(100, int(decision["confidence_pct"])))
+    breakdown = compute_calibration_breakdown(result)
+    calibration_html = render_calibration_panel_html(breakdown, text_color)
     placeholder.markdown(
         f"""
         <div class="decision-verdict-card" style="border-color: {border_color}; box-shadow: {glow}, inset 0 1px 0 rgba(255, 255, 255, 0.045);">
@@ -1116,6 +1322,7 @@ def render_decision_card(placeholder, result: dict) -> None:
             <p class="decision-rationale">{html.escape(decision["rationale"])}</p>
             <div class="decision-condition"><strong>Primary condition:</strong> {html.escape(decision["primary_condition"])}</div>
             <div class="decision-condition"><strong>Revisit if:</strong> {html.escape(decision["revisit_trigger"])}</div>
+            {calibration_html}
         </div>
         """,
         unsafe_allow_html=True,
