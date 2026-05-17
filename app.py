@@ -93,12 +93,7 @@ st.markdown(
         }
 
         html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
-            background: radial-gradient(
-                ellipse 140% 45% at 50% -5%,
-                rgba(245, 158, 11, 0.07) 0%,
-                rgba(245, 158, 11, 0.02) 35%,
-                #09090B 65%
-            ) !important;
+            background: #09090B !important;
             background-attachment: fixed !important;
         }
 
@@ -724,22 +719,31 @@ st.markdown(
             margin: 24px 0;
         }
 
-        .decision-rationale {
+        .decision-verdict-card .decision-rationale {
             color: #E5E5E5;
-            max-width: 820px;
-            margin: 0 auto 18px;
-            line-height: 1.65;
+            max-width: 620px;
+            margin-top: 0 !important;
+            margin-right: auto !important;
+            margin-bottom: 18px !important;
+            margin-left: auto !important;
+            line-height: 1.7;
             text-align: center;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
         }
 
-        .decision-condition {
+        .decision-verdict-card .decision-condition {
             color: #BDBDBD;
-            margin-top: 8px;
             font-size: 0.95rem;
-            max-width: 820px;
-            margin-left: auto;
-            margin-right: auto;
+            max-width: 620px;
+            margin-top: 8px !important;
+            margin-right: auto !important;
+            margin-bottom: 0 !important;
+            margin-left: auto !important;
             text-align: center;
+            line-height: 1.55;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
         }
 
         .threat-score {
@@ -1358,7 +1362,15 @@ def compute_calibration_breakdown(result: dict) -> dict:
 
 
 def render_calibration_panel_html(breakdown: dict, accent_color: str) -> str:
-    """Render the calibration disclosure inline under the verdict card."""
+    """Render the calibration disclosure inline under the verdict card.
+
+    Returns a single-line HTML string (no embedded newlines). Streamlit's
+    CommonMark renderer ends an HTML block at the first blank line — if this
+    string is interpolated into a parent f-string with whitespace around it,
+    that blank line will close the outer <div> early and the parent's
+    closing </div> will be re-parsed as a markdown code block. Keeping the
+    return value as a single line eliminates that whole failure mode.
+    """
     delta = breakdown["delta"]
     if delta == 0:
         delta_phrase = "matches"
@@ -1371,40 +1383,40 @@ def render_calibration_panel_html(breakdown: dict, accent_color: str) -> str:
         delta_phrase = f"{abs(delta)}% {sign}"
         delta_class = "calib-delta-far"
 
-    return f"""
-    <div class="calibration-panel" style="--calib-accent: {accent_color};">
-        <div class="calibration-header">
-            <span class="calibration-title">Confidence Calibration</span>
-            <span class="calibration-sub">how the {breakdown["llm"]}% was earned</span>
-        </div>
-        <div class="calibration-row">
-            <div class="calibration-cell">
-                <div class="calibration-cell-value">{breakdown["base"]}%</div>
-                <div class="calibration-cell-label">Base ceiling</div>
-            </div>
-            <div class="calibration-op">−</div>
-            <div class="calibration-cell">
-                <div class="calibration-cell-value">{breakdown["unresolved_penalty"]}%</div>
-                <div class="calibration-cell-label">{breakdown["unresolved"]} unresolved · 8% each</div>
-            </div>
-            <div class="calibration-op">−</div>
-            <div class="calibration-cell">
-                <div class="calibration-cell-value">{breakdown["resolved_penalty"]}%</div>
-                <div class="calibration-cell-label">{breakdown["resolved"]} resolved · 2% each</div>
-            </div>
-            <div class="calibration-op">=</div>
-            <div class="calibration-cell calibration-cell-result">
-                <div class="calibration-cell-value">{breakdown["deterministic"]}%</div>
-                <div class="calibration-cell-label">Deterministic</div>
-            </div>
-        </div>
-        <div class="calibration-footer">
-            <span class="calibration-llm-label">LLM said:</span>
-            <span class="calibration-llm-value">{breakdown["llm"]}%</span>
-            <span class="calibration-delta {delta_class}">{delta_phrase} deterministic</span>
-        </div>
-    </div>
-    """
+    return (
+        f'<div class="calibration-panel" style="--calib-accent: {accent_color};">'
+        f'<div class="calibration-header">'
+        f'<span class="calibration-title">Confidence Calibration</span>'
+        f'<span class="calibration-sub">how the {breakdown["llm"]}% was earned</span>'
+        f'</div>'
+        f'<div class="calibration-row">'
+        f'<div class="calibration-cell">'
+        f'<div class="calibration-cell-value">{breakdown["base"]}%</div>'
+        f'<div class="calibration-cell-label">Base ceiling</div>'
+        f'</div>'
+        f'<div class="calibration-op">−</div>'
+        f'<div class="calibration-cell">'
+        f'<div class="calibration-cell-value">{breakdown["unresolved_penalty"]}%</div>'
+        f'<div class="calibration-cell-label">{breakdown["unresolved"]} unresolved · 8% each</div>'
+        f'</div>'
+        f'<div class="calibration-op">−</div>'
+        f'<div class="calibration-cell">'
+        f'<div class="calibration-cell-value">{breakdown["resolved_penalty"]}%</div>'
+        f'<div class="calibration-cell-label">{breakdown["resolved"]} resolved · 2% each</div>'
+        f'</div>'
+        f'<div class="calibration-op">=</div>'
+        f'<div class="calibration-cell calibration-cell-result">'
+        f'<div class="calibration-cell-value">{breakdown["deterministic"]}%</div>'
+        f'<div class="calibration-cell-label">Deterministic</div>'
+        f'</div>'
+        f'</div>'
+        f'<div class="calibration-footer">'
+        f'<span class="calibration-llm-label">LLM said:</span>'
+        f'<span class="calibration-llm-value">{breakdown["llm"]}%</span>'
+        f'<span class="calibration-delta {delta_class}">{delta_phrase} deterministic</span>'
+        f'</div>'
+        f'</div>'
+    )
 
 
 _PDF_DECISION_COLORS = {
