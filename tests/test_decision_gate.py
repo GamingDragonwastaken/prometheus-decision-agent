@@ -54,15 +54,18 @@ class DecisionGateAgentTests(unittest.IsolatedAsyncioTestCase):
             executive_summary="OpenAI is a serious incumbent. A narrow wedge may still be viable.",
             timestamp=datetime.now(),
         )
-        decision_response = "\n".join(
-            [
-                "DECISION: LAUNCH",
-                "CONFIDENCE: 104",
-                "PRIMARY_CONDITION: Target regulated buyers must confirm at least 3 urgent workflow gaps in 15 interviews within 30 days.",
-                "SECONDARY_CONDITION: Prototype must beat OpenAI on the selected workflow by 20% in task completion time.",
-                "REVISIT_TRIGGER: Revisit if Anthropic or OpenAI launches a dedicated regulated-enterprise workflow product before prototype completion.",
-                "RATIONALE: Challenger's strongest objection is that the OpenAI dominance claim relies on usage metrics rather than paid production retention. The decision remains cautious because this gap prevents a high-confidence GO.",
-            ]
+        import json
+
+        decision_response = json.dumps(
+            {
+                # An invalid decision falls back to MONITOR; confidence is clamped to [0, 100].
+                "decision": "LAUNCH",
+                "confidence_pct": 104,
+                "primary_condition": "Target regulated buyers must confirm at least 3 urgent workflow gaps in 15 interviews within 30 days.",
+                "secondary_condition": "Prototype must beat OpenAI on the selected workflow by 20% in task completion time.",
+                "revisit_trigger": "Revisit if Anthropic or OpenAI launches a dedicated regulated-enterprise workflow product before prototype completion.",
+                "rationale": "Challenger's strongest objection is that the OpenAI dominance claim relies on usage metrics rather than paid production retention. The decision remains cautious because this gap prevents a high-confidence GO.",
+            }
         )
 
         with patch(

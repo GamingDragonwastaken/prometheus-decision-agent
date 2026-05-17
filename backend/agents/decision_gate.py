@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+import re
 from typing import Any
 
 import google.generativeai as genai
@@ -22,32 +24,39 @@ and Strategist's synthesis. Your job is not to summarize. Your job is to DECIDE.
 Rules:
 - Choose exactly one: GO (pursue this), NO-GO (do not pursue), MONITOR (insufficient data).
 - Confidence calibration:
-  * Challenger found 3+ major unresolved gaps → confidence max 65%
-  * Challenger found 1-2 gaps that Strategist resolved → confidence up to 82%
-  * Challenger's objections were minor and all resolved → confidence up to 90%
-  * NEVER exceed 92% — no business decision has perfect information
-- Primary condition: The single most critical assumption that must hold for your decision
-  to stand. Be specific — not "market must be viable" but "target segment ARR growth must
-  exceed 15% YoY for 2 consecutive years."
-- Revisit trigger: One specific, observable event. Not "if things change" but
-  "if [named competitor] raises Series B above $200M" or "if [named regulation] passes."
-- Rationale: Name Challenger's STRONGEST specific objection (quote it or paraphrase precisely)
-  and explain why the decision holds (or doesn't hold) despite it.
+  * Challenger found 3+ major unresolved gaps -> confidence max 65
+  * Challenger found 1-2 gaps that Strategist resolved -> confidence up to 82
+  * Challenger's objections were minor and all resolved -> confidence up to 90
+  * NEVER exceed 92 - no business decision has perfect information
+- Primary condition: the single most critical assumption that must hold. Be specific.
+  Not "market must be viable" but "target segment ARR growth must exceed 15% YoY for 2
+  consecutive years."
+- Revisit trigger: one specific, observable event. Not "if things change" but
+  "if [named competitor] raises Series B above $200M."
+- Rationale: name Challenger's STRONGEST specific objection (quote or paraphrase
+  precisely) and explain why the decision holds or doesn't hold despite it.
 
-Respond in this EXACT format (machine-parsed, no deviations, no markdown):
-DECISION: [GO / NO-GO / MONITOR]
-CONFIDENCE: [integer 0-100]
-PRIMARY_CONDITION: [one specific sentence]
-SECONDARY_CONDITION: [one specific sentence]
-REVISIT_TRIGGER: [one specific, observable sentence]
-RATIONALE: [2-3 sentences naming Challenger's strongest objection explicitly]
+Respond with valid JSON only. No markdown, no commentary outside the JSON object.
+
+Schema:
+{
+  "decision": "GO" | "NO-GO" | "MONITOR",
+  "confidence_pct": <integer 0-100>,
+  "primary_condition": "<one specific sentence>",
+  "secondary_condition": "<one specific sentence>",
+  "revisit_trigger": "<one specific, observable sentence>",
+  "rationale": "<2-3 sentences naming Challenger's strongest objection explicitly>"
+}
 """
 
 
 load_dotenv()
 GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL_NAME", "gemini-3-flash-preview")
 GEMINI_FALLBACK_MODEL_NAME = os.getenv("GEMINI_FALLBACK_MODEL_NAME", "gemini-2.5-flash")
-GENERATION_CONFIG = {"temperature": 0.2}
+GENERATION_CONFIG = {
+    "temperature": 0.2,
+    "response_mime_type": "application/json",
+}
 VALID_DECISIONS = {"GO", "NO-GO", "MONITOR"}
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -122,57 +131,73 @@ async def _generate_decision(decision_context: str) -> str:
 
 
 def _parse_decision_response(raw_decision: str) -> DecisionBrief:
-    fields: dict[str, str] = {}
-    for line in raw_decision.splitlines():
-        stripped = line.strip()
-        if not stripped or ": " not in stripped:
-            continue
-        field_name, value = stripped.split(": ", maxsplit=1)
-        fields[field_name.strip()] = value.strip()
-
+    payload = _safe_json_load(raw_decision)
     return DecisionBrief(
-        decision=_valid_decision(fields.get("DECISION")),
-        confidence_pct=_clamp_confidence(fields.get("CONFIDENCE")),
+        decision=_valid_decision(payload.get("decision")),
+        confidence_pct=_clamp_confidence(payload.get("confidence_pct")),
         primary_condition=_field_or_fallback(
-            fields,
-            "PRIMARY_CONDITION",
+            payload,
+            "primary_condition",
             "Primary condition was missing; require a corrected Decision Gate response before acting.",
         ),
         secondary_condition=_field_or_fallback(
-            fields,
-            "SECONDARY_CONDITION",
+            payload,
+            "secondary_condition",
             "Secondary condition was missing; require a corrected Decision Gate response before acting.",
         ),
         revisit_trigger=_field_or_fallback(
-            fields,
-            "REVISIT_TRIGGER",
+            payload,
+            "revisit_trigger",
             "Revisit trigger was missing; require a corrected Decision Gate response before acting.",
         ),
         rationale=_field_or_fallback(
-            fields,
-            "RATIONALE",
+            payload,
+            "rationale",
             "Rationale was missing; require a corrected Decision Gate response before acting.",
         ),
     )
 
 
-def _valid_decision(value: str | None) -> str:
-    decision = (value or "").strip()
+def _safe_json_load(raw: str) -> dict[str, Any]:
+    """Parse Decision Gate JSON, tolerating fences or stray prose."""
+    cleaned = (raw or "").strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+    try:
+        loaded = json.loads(cleaned)
+        if isinstance(loaded, dict):
+            return loaded
+    except json.JSONDecodeError:
+        pass
+    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    if match:
+        try:
+            loaded = json.loads(match.group(0))
+            if isinstance(loaded, dict):
+                return loaded
+        except json.JSONDecodeError:
+            pass
+    return {}
+
+
+def _valid_decision(value: Any) -> str:
+    decision = str(value or "").strip().upper()
     if decision not in VALID_DECISIONS:
         return "MONITOR"
     return decision
 
 
-def _clamp_confidence(value: str | None) -> int:
+def _clamp_confidence(value: Any) -> int:
     try:
-        confidence = int(value or "")
-    except ValueError:
+        confidence = int(value)
+    except (TypeError, ValueError):
         confidence = 0
     return max(0, min(100, confidence))
 
 
-def _field_or_fallback(fields: dict[str, str], key: str, fallback: str) -> str:
-    value = fields.get(key, "").strip()
+def _field_or_fallback(payload: dict[str, Any], key: str, fallback: str) -> str:
+    value = str(payload.get(key, "") or "").strip()
     return value or fallback
 
 
@@ -186,7 +211,10 @@ def _generate_decision_rest(api_key: str | None, model_name: str, decision_conte
         payload={
             "systemInstruction": {"parts": [{"text": DECISION_GATE_SYSTEM_PROMPT}]},
             "contents": [{"parts": [{"text": decision_context}]}],
-            "generationConfig": {"temperature": 0.2},
+            "generationConfig": {
+                "temperature": 0.2,
+                "responseMimeType": "application/json",
+            },
         },
     )
     return _text_from_rest_response(response)

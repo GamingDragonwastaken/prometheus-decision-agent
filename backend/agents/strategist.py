@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+import re
 from datetime import datetime
 from typing import Any
 
@@ -24,31 +26,45 @@ Rules:
 - Where Challenger's challenge is strong and Scout didn't support the claim with evidence,
   reduce confidence in that finding.
 - Where Scout's data is specific and recent and Challenger's objection is weak, maintain it.
-- Scores must reflect reality. 7+ means serious. Reserve 9–10 for genuinely extreme situations.
+- Scores must reflect reality. 7+ means serious. Reserve 9-10 for genuinely extreme situations.
 - Recommendations must be specific and immediately actionable. No platitudes like "monitor
   the situation" or "consider partnerships."
 - Executive summary: 3 sentences maximum. Make every word earn its place.
-- RESOLVED_ lines are machine-parsed. Follow the format exactly — no deviations.
 
-Respond in this EXACT format (each field on its own line, no markdown, no extra text):
-THREAT_SCORE: [integer 1-10]
-THREAT_RATIONALE: [one sentence]
-OPPORTUNITY_SCORE: [integer 1-10]
-OPPORTUNITY_RATIONALE: [one sentence]
-RECOMMENDATION_1: [specific action — what, by when, expected outcome]
-RECOMMENDATION_2: [specific action — what, by when, expected outcome]
-RECOMMENDATION_3: [specific action — what, by when, expected outcome]
-EXECUTIVE_SUMMARY: [3 sentences maximum]
-RESOLVED_1: [Scout claim] | [Challenger objection] | [How resolved]
-RESOLVED_2: [Scout claim] | [Challenger objection] | [How resolved]
-RESOLVED_3: [Scout claim] | [Challenger objection] | [How resolved]
+Respond with valid JSON only. No markdown, no commentary outside the JSON object.
+
+Schema:
+{
+  "threat_score": <integer 1-10>,
+  "threat_rationale": "<one sentence>",
+  "opportunity_score": <integer 1-10>,
+  "opportunity_rationale": "<one sentence>",
+  "recommendations": [
+    "<specific action - what, by when, expected outcome>",
+    "<specific action>",
+    "<specific action>"
+  ],
+  "executive_summary": "<3 sentences maximum>",
+  "disagreements": [
+    {
+      "scout_claim": "<the Scout claim being addressed>",
+      "challenger_objection": "<the Challenger objection to it>",
+      "strategist_resolution": "<how you resolved or qualified the disagreement>"
+    },
+    { "scout_claim": "...", "challenger_objection": "...", "strategist_resolution": "..." },
+    { "scout_claim": "...", "challenger_objection": "...", "strategist_resolution": "..." }
+  ]
+}
 """
 
 
 load_dotenv()
 GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL_NAME", "gemini-3-flash-preview")
 GEMINI_FALLBACK_MODEL_NAME = os.getenv("GEMINI_FALLBACK_MODEL_NAME", "gemini-2.5-flash")
-GENERATION_CONFIG = {"temperature": 0.4}
+GENERATION_CONFIG = {
+    "temperature": 0.4,
+    "response_mime_type": "application/json",
+}
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 STRATEGIST_MODEL = genai.GenerativeModel(
@@ -121,72 +137,99 @@ def _parse_strategy_response(
     question: str,
     raw_strategy: str,
 ) -> tuple[StrategicBrief, list[DisagreementRow]]:
-    fields: dict[str, str] = {}
-    for line in raw_strategy.splitlines():
-        stripped = line.strip()
-        if not stripped or ": " not in stripped:
-            continue
-        field_name, value = stripped.split(": ", maxsplit=1)
-        fields[field_name.strip()] = value.strip()
+    payload = _safe_json_load(raw_strategy)
 
+    recommendations_raw = payload.get("recommendations") or []
     recommendations = [
-        fields.get(f"RECOMMENDATION_{index}", _fallback_recommendation(index))
-        for index in range(1, 4)
+        str(item).strip() or _fallback_recommendation(index)
+        for index, item in enumerate(recommendations_raw[:3], start=1)
     ]
+    while len(recommendations) < 3:
+        recommendations.append(_fallback_recommendation(len(recommendations) + 1))
+
+    disagreements_raw = payload.get("disagreements") or []
     disagreements = [
-        _parse_disagreement_row(fields.get(f"RESOLVED_{index}", ""), index)
-        for index in range(1, 4)
+        _parse_disagreement_row(row, index)
+        for index, row in enumerate(disagreements_raw[:3], start=1)
     ]
+    while len(disagreements) < 3:
+        disagreements.append(_parse_disagreement_row({}, len(disagreements) + 1))
 
     strategy = StrategicBrief(
         question=question,
-        threat_score=_clamp_score(fields.get("THREAT_SCORE")),
-        opportunity_score=_clamp_score(fields.get("OPPORTUNITY_SCORE")),
-        threat_score_rationale=fields.get(
-            "THREAT_RATIONALE",
-            "Threat score rationale was not provided by Strategist.",
-        ),
-        opportunity_score_rationale=fields.get(
-            "OPPORTUNITY_RATIONALE",
-            "Opportunity score rationale was not provided by Strategist.",
-        ),
+        threat_score=_clamp_score(payload.get("threat_score")),
+        opportunity_score=_clamp_score(payload.get("opportunity_score")),
+        threat_score_rationale=(payload.get("threat_rationale") or "").strip()
+        or "Threat score rationale was not provided by Strategist.",
+        opportunity_score_rationale=(payload.get("opportunity_rationale") or "").strip()
+        or "Opportunity score rationale was not provided by Strategist.",
         recommendations=recommendations,
-        executive_summary=fields.get(
-            "EXECUTIVE_SUMMARY",
-            "Strategist did not provide an executive summary.",
-        ),
+        executive_summary=(payload.get("executive_summary") or "").strip()
+        or "Strategist did not provide an executive summary.",
         timestamp=datetime.now(),
     )
     return strategy, disagreements
 
 
-def _parse_disagreement_row(value: str, index: int) -> DisagreementRow:
-    parts = [part.strip() for part in value.split(" | ", maxsplit=2)]
-    if len(parts) != 3 or any(not part for part in parts):
-        return DisagreementRow(
-            scout_claim=f"Unparsed Scout claim from RESOLVED_{index}: {value or 'missing'}",
-            challenger_objection=f"Unparsed Challenger objection from RESOLVED_{index}: {value or 'missing'}",
-            strategist_resolution=f"Strategist output for RESOLVED_{index} was malformed; review raw model output.",
-        )
+def _safe_json_load(raw: str) -> dict[str, Any]:
+    """Parse Strategist JSON, tolerating markdown fences and stray prose."""
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+    try:
+        loaded = json.loads(cleaned)
+        if isinstance(loaded, dict):
+            return loaded
+    except json.JSONDecodeError:
+        pass
+    # Fall back to extracting the first {...} block if the model wrapped it
+    # in chat-style commentary.
+    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    if match:
+        try:
+            loaded = json.loads(match.group(0))
+            if isinstance(loaded, dict):
+                return loaded
+        except json.JSONDecodeError:
+            pass
+    return {}
 
+
+def _parse_disagreement_row(row: Any, index: int) -> DisagreementRow:
+    if not isinstance(row, dict):
+        return _malformed_disagreement(index)
+    scout_claim = str(row.get("scout_claim") or "").strip()
+    challenger_objection = str(row.get("challenger_objection") or "").strip()
+    strategist_resolution = str(row.get("strategist_resolution") or "").strip()
+    if not (scout_claim and challenger_objection and strategist_resolution):
+        return _malformed_disagreement(index)
     return DisagreementRow(
-        scout_claim=parts[0],
-        challenger_objection=parts[1],
-        strategist_resolution=parts[2],
+        scout_claim=scout_claim,
+        challenger_objection=challenger_objection,
+        strategist_resolution=strategist_resolution,
     )
 
 
-def _clamp_score(value: str | None) -> int:
+def _malformed_disagreement(index: int) -> DisagreementRow:
+    return DisagreementRow(
+        scout_claim=f"Disagreement row {index} was not produced by Strategist.",
+        challenger_objection="Strategist's JSON output omitted this disagreement.",
+        strategist_resolution="Resolution unavailable; review raw model output.",
+    )
+
+
+def _clamp_score(value: Any) -> int:
     try:
-        score = int(value or "")
-    except ValueError:
+        score = int(value)
+    except (TypeError, ValueError):
         score = 5
     return max(1, min(10, score))
 
 
 def _fallback_recommendation(index: int) -> str:
     return (
-        f"RECOMMENDATION_{index} was missing; request a corrected Strategist response "
+        f"Recommendation {index} was missing; request a corrected Strategist response "
         "before using this brief for a decision."
     )
 
@@ -201,7 +244,10 @@ def _generate_strategy_rest(api_key: str | None, model_name: str, combined_brief
         payload={
             "systemInstruction": {"parts": [{"text": STRATEGIST_SYSTEM_PROMPT}]},
             "contents": [{"parts": [{"text": combined_brief}]}],
-            "generationConfig": {"temperature": 0.4},
+            "generationConfig": {
+                "temperature": 0.4,
+                "responseMimeType": "application/json",
+            },
         },
     )
     return _text_from_rest_response(response)

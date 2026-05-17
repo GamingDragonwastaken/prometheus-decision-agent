@@ -1,3 +1,4 @@
+import json
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -39,20 +40,36 @@ class StrategistAgentTests(unittest.IsolatedAsyncioTestCase):
             ],
             raw_narrative="Critique narrative",
         )
-        strategist_response = "\n".join(
-            [
-                "THREAT_SCORE: 12",
-                "THREAT_RATIONALE: OpenAI is a major incumbent with distribution, models, and enterprise credibility.",
-                "OPPORTUNITY_SCORE: 0",
-                "OPPORTUNITY_RATIONALE: Focused vertical enterprise workflows remain underserved by broad platforms.",
-                "RECOMMENDATION_1: Interview 15 regulated-enterprise AI buyers within 30 days to isolate two unmet workflow needs.",
-                "RECOMMENDATION_2: Build a security-first proof of concept for one selected workflow within 45 days to validate buyer urgency.",
-                "RECOMMENDATION_3: Benchmark against OpenAI and Anthropic on the selected workflow within 60 days to prove a measurable advantage.",
-                "EXECUTIVE_SUMMARY: OpenAI is a serious threat, but broad coverage leaves room for focused enterprise workflows. Enter only if buyer interviews validate a narrow wedge. Compete on workflow depth, not general model capability.",
-                "RESOLVED_1: OpenAI has a strong enterprise AI position | The claim lacks retention evidence | Treat as strong distribution, not proven durable retention.",
-                "RESOLVED_2: OpenAI launched deployment services | This may indicate product complexity | Count it as both go-to-market strength and implementation-friction signal.",
-                "RESOLVED_3: Anthropic gained enterprise share | Share shift may reflect multi-model procurement | Assume buyers are diversifying rather than fully abandoning OpenAI.",
-            ]
+        strategist_response = json.dumps(
+            {
+                "threat_score": 12,
+                "threat_rationale": "OpenAI is a major incumbent with distribution, models, and enterprise credibility.",
+                "opportunity_score": 0,
+                "opportunity_rationale": "Focused vertical enterprise workflows remain underserved by broad platforms.",
+                "recommendations": [
+                    "Interview 15 regulated-enterprise AI buyers within 30 days to isolate two unmet workflow needs.",
+                    "Build a security-first proof of concept for one selected workflow within 45 days to validate buyer urgency.",
+                    "Benchmark against OpenAI and Anthropic on the selected workflow within 60 days to prove a measurable advantage.",
+                ],
+                "executive_summary": "OpenAI is a serious threat, but broad coverage leaves room for focused enterprise workflows. Enter only if buyer interviews validate a narrow wedge. Compete on workflow depth, not general model capability.",
+                "disagreements": [
+                    {
+                        "scout_claim": "OpenAI has a strong enterprise AI position",
+                        "challenger_objection": "The claim lacks retention evidence",
+                        "strategist_resolution": "Treat as strong distribution, not proven durable retention.",
+                    },
+                    {
+                        "scout_claim": "OpenAI launched deployment services",
+                        "challenger_objection": "This may indicate product complexity",
+                        "strategist_resolution": "Count it as both go-to-market strength and implementation-friction signal.",
+                    },
+                    {
+                        "scout_claim": "Anthropic gained enterprise share",
+                        "challenger_objection": "Share shift may reflect multi-model procurement",
+                        "strategist_resolution": "Assume buyers are diversifying rather than fully abandoning OpenAI.",
+                    },
+                ],
+            }
         )
 
         with patch(
@@ -62,6 +79,7 @@ class StrategistAgentTests(unittest.IsolatedAsyncioTestCase):
             strategy, disagreements = await run_strategist(research, critique)
 
         self.assertIsInstance(strategy, StrategicBrief)
+        # Out-of-range scores are clamped to [1, 10].
         self.assertEqual(strategy.threat_score, 10)
         self.assertEqual(strategy.opportunity_score, 1)
         self.assertEqual(len(strategy.recommendations), 3)
