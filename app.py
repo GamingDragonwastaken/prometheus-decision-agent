@@ -41,6 +41,7 @@ SESSION_DEFAULTS = {
     "question_text": "",
     "cache_notice": "",
     "scout_text": "",
+    "scout_citations": [],
     "challenger_text": "",
     "strategist_text": "",
     "decision_text": "",
@@ -286,6 +287,67 @@ st.markdown(
         }
 
         .exchange-icon { display: inline-block; }
+
+        .scout-citations-strip {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px 8px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px dashed rgba(255, 255, 255, 0.05);
+        }
+
+        .scout-citations-label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: rgba(59, 130, 246, 0.85);
+            margin-right: 6px;
+        }
+
+        .scout-citation {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(59, 130, 246, 0.07);
+            border: 1px solid rgba(59, 130, 246, 0.18);
+            color: #BFD4F5 !important;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            text-decoration: none !important;
+            transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+            max-width: 240px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .scout-citation:hover {
+            background: rgba(59, 130, 246, 0.14);
+            border-color: rgba(59, 130, 246, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .scout-citation-dot {
+            display: inline-block;
+            width: 5px;
+            height: 5px;
+            border-radius: 999px;
+            background: rgba(59, 130, 246, 0.9);
+            flex: 0 0 5px;
+        }
+
+        .scout-citation-more {
+            font-size: 0.72rem;
+            color: #737373;
+            margin-left: 4px;
+            font-weight: 600;
+        }
 
         .exchange-callout-sub {
             color: #A3A3A3;
@@ -708,6 +770,7 @@ def fetch_history() -> list[dict]:
 
 def clear_results() -> None:
     st.session_state.scout_text = ""
+    st.session_state.scout_citations = []
     st.session_state.challenger_text = ""
     st.session_state.strategist_text = ""
     st.session_state.decision_text = ""
@@ -799,6 +862,7 @@ def render_agent_panel(
     status_label: str,
     status_class: str,
     output_text: str,
+    extras_html: str = "",
 ) -> None:
     output = output_text.strip() if output_text else "Waiting for analysis output."
     output_class = "panel-output" if output_text else "panel-output empty-output"
@@ -820,10 +884,51 @@ def render_agent_panel(
                 <span class="status-badge {status_class}">{status_label}</span>
             </div>
             <div class="{output_class}">{markdown_to_panel_html(output)}</div>
+            {extras_html}
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+
+def format_scout_citations_html(citations: list[dict]) -> str:
+    """Render Scout's grounding sources as a chip strip below the panel output."""
+    if not citations:
+        return ""
+    chips: list[str] = []
+    for citation in citations[:12]:  # cap for visual density
+        uri = html.escape(citation.get("uri", ""))
+        domain = html.escape(citation.get("domain") or _domain_from_uri(citation.get("uri", "")))
+        title = html.escape(citation.get("title") or domain or "source")
+        if not uri:
+            continue
+        chips.append(
+            f'<a class="scout-citation" href="{uri}" target="_blank" rel="noopener noreferrer" '
+            f'title="{title}"><span class="scout-citation-dot"></span>{domain or title}</a>'
+        )
+    if not chips:
+        return ""
+    extra = (
+        f'<span class="scout-citation-more">+{len(citations) - 12} more</span>'
+        if len(citations) > 12
+        else ""
+    )
+    return (
+        f'<div class="scout-citations-strip">'
+        f'<span class="scout-citations-label">{len(citations)} sources scanned</span>'
+        f'{"".join(chips)}{extra}'
+        f'</div>'
+    )
+
+
+def _domain_from_uri(uri: str) -> str:
+    try:
+        from urllib.parse import urlparse
+
+        host = urlparse(uri).hostname or ""
+        return host.removeprefix("www.")
+    except Exception:
+        return ""
 
 
 PIPELINE_CONNECTORS = {
@@ -877,6 +982,7 @@ def render_all_agent_panels(
         "Live web research via Google Search",
         *statuses.get("scout", ("● Idle", "status-idle")),
         st.session_state.scout_text,
+        extras_html=format_scout_citations_html(st.session_state.scout_citations),
     )
     render_agent_panel(
         challenger_placeholder,
@@ -1065,6 +1171,7 @@ def render_strategic_brief(placeholder, result: dict) -> None:
 def store_result(result: dict) -> None:
     st.session_state.final_result = result
     st.session_state.scout_text = format_scout_output(result["research"])
+    st.session_state.scout_citations = result["research"].get("citations", [])
     st.session_state.challenger_text = format_challenger_output(result["critique"])
     st.session_state.strategist_text = format_strategist_output(result["strategy"])
     st.session_state.decision_text = format_decision_output(result["decision"])
@@ -1084,6 +1191,7 @@ def progressive_display(
     st.session_state.final_result = result
 
     st.session_state.scout_text = format_scout_output(result["research"])
+    st.session_state.scout_citations = result["research"].get("citations", [])
     render_agent_panel(
         scout_placeholder,
         "scout",
@@ -1092,6 +1200,7 @@ def progressive_display(
         "✓ Complete",
         "status-scout",
         st.session_state.scout_text,
+        extras_html=format_scout_citations_html(st.session_state.scout_citations),
     )
     time.sleep(0.4)
 

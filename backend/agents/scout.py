@@ -12,7 +12,7 @@ import google.generativeai as genai
 import httpx
 from dotenv import load_dotenv
 
-from backend.models import ResearchBrief
+from backend.models import Citation, ResearchBrief
 
 
 SCOUT_SYSTEM_PROMPT = """
@@ -59,12 +59,13 @@ class GeminiRateLimitError(RuntimeError):
 
 async def run_scout(question: str) -> ResearchBrief:
     """Research a strategic question and return a structured Scout brief."""
-    raw_narrative = await _generate_grounded_research(question)
+    raw_narrative, citations = await _generate_grounded_research(question)
     parsed_payload = await _parse_research_brief(question, raw_narrative)
+    parsed_payload["citations"] = [citation.model_dump() for citation in citations]
     return ResearchBrief.model_validate(parsed_payload)
 
 
-async def _generate_grounded_research(question: str) -> str:
+async def _generate_grounded_research(question: str) -> tuple[str, list[Citation]]:
     prompt = f"Research this decision question thoroughly: {question}"
 
     try:
@@ -73,7 +74,7 @@ async def _generate_grounded_research(question: str) -> str:
             prompt,
             tools=GOOGLE_SEARCH_TOOLS,
         )
-        return _response_text(response)
+        return _response_text(response), _citations_from_sdk_response(response)
     except ValueError as exc:
         if "google_search" not in str(exc):
             raise
@@ -87,6 +88,50 @@ async def _generate_grounded_research(question: str) -> str:
         GEMINI_MODEL_NAME,
         prompt,
     )
+
+
+def _citations_from_sdk_response(response: Any) -> list[Citation]:
+    """Extract de-duplicated citations from a native-SDK Gemini response."""
+    try:
+        candidate = response.candidates[0]
+        metadata = getattr(candidate, "grounding_metadata", None)
+        chunks = getattr(metadata, "grounding_chunks", None) or []
+    except (IndexError, AttributeError):
+        return []
+    return _dedupe_citations(
+        Citation(
+            uri=getattr(getattr(chunk, "web", None), "uri", "") or "",
+            title=getattr(getattr(chunk, "web", None), "title", "") or "",
+        )
+        for chunk in chunks
+    )
+
+
+def _citations_from_rest_response(response: dict[str, Any]) -> list[Citation]:
+    """Extract de-duplicated citations from a REST-API Gemini response dict."""
+    candidates = response.get("candidates") or []
+    if not candidates:
+        return []
+    metadata = candidates[0].get("groundingMetadata") or {}
+    chunks = metadata.get("groundingChunks") or []
+    return _dedupe_citations(
+        Citation(
+            uri=(chunk.get("web") or {}).get("uri", "") or "",
+            title=(chunk.get("web") or {}).get("title", "") or "",
+        )
+        for chunk in chunks
+    )
+
+
+def _dedupe_citations(citations: Any) -> list[Citation]:
+    seen: set[str] = set()
+    unique: list[Citation] = []
+    for citation in citations:
+        if not citation.uri or citation.uri in seen:
+            continue
+        seen.add(citation.uri)
+        unique.append(citation)
+    return unique
 
 
 async def _parse_research_brief(question: str, raw_narrative: str) -> dict[str, Any]:
@@ -136,7 +181,9 @@ Scout research narrative:
     )
 
 
-def _generate_grounded_research_rest(api_key: str | None, model_name: str, prompt: str) -> str:
+def _generate_grounded_research_rest(
+    api_key: str | None, model_name: str, prompt: str
+) -> tuple[str, list[Citation]]:
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set in the environment.")
 
@@ -161,7 +208,7 @@ def _generate_grounded_research_rest(api_key: str | None, model_name: str, promp
             },
         )
 
-    return _text_from_rest_response(response)
+    return _text_from_rest_response(response), _citations_from_rest_response(response)
 
 
 def _parse_research_brief_rest(api_key: str | None, model_name: str, prompt: str) -> dict[str, Any]:
