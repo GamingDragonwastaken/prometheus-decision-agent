@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 import html
 import json
@@ -11,6 +12,19 @@ import time
 import httpx
 import streamlit as st
 import yaml
+
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.pagesizes import LETTER
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.platypus import (
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 
 try:
@@ -1304,6 +1318,259 @@ def render_calibration_panel_html(breakdown: dict, accent_color: str) -> str:
     """
 
 
+_PDF_DECISION_COLORS = {
+    "GO": colors.HexColor("#16A34A"),
+    "NO-GO": colors.HexColor("#DC2626"),
+    "MONITOR": colors.HexColor("#D97706"),
+}
+
+
+def build_verdict_pdf(result: dict) -> bytes:
+    """Render a one-page PDF brief of the PROMETHEUS verdict.
+
+    Pure-Python via reportlab so it works on Streamlit Cloud without
+    cairo/pango system dependencies.
+    """
+    decision = result.get("decision") or {}
+    strategy = result.get("strategy") or {}
+    research = result.get("research") or {}
+    critique = result.get("critique") or {}
+    disagreements = result.get("disagreements") or []
+    citations = research.get("citations") or []
+
+    decision_value = (decision.get("decision") or "MONITOR").upper()
+    decision_color = _PDF_DECISION_COLORS.get(decision_value, colors.HexColor("#D97706"))
+    confidence = max(0, min(100, int(decision.get("confidence_pct") or 0)))
+    breakdown = compute_calibration_breakdown(result)
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=LETTER,
+        leftMargin=0.7 * inch,
+        rightMargin=0.7 * inch,
+        topMargin=0.6 * inch,
+        bottomMargin=0.6 * inch,
+        title=f"PROMETHEUS Verdict — {decision_value}",
+        author="PROMETHEUS",
+    )
+
+    styles = getSampleStyleSheet()
+    body = ParagraphStyle(
+        "Body",
+        parent=styles["BodyText"],
+        fontName="Helvetica",
+        fontSize=9.5,
+        leading=13,
+        textColor=colors.HexColor("#1F2937"),
+    )
+    small = ParagraphStyle(
+        "Small",
+        parent=body,
+        fontSize=8.2,
+        leading=11,
+        textColor=colors.HexColor("#4B5563"),
+    )
+    label = ParagraphStyle(
+        "Label",
+        parent=small,
+        fontName="Helvetica-Bold",
+        textColor=colors.HexColor("#92400E"),
+        spaceBefore=6,
+        spaceAfter=2,
+    )
+    h1 = ParagraphStyle(
+        "H1",
+        parent=styles["Heading1"],
+        fontName="Helvetica-Bold",
+        fontSize=20,
+        leading=22,
+        textColor=colors.HexColor("#92400E"),
+        alignment=TA_LEFT,
+        spaceAfter=2,
+    )
+    h_sub = ParagraphStyle(
+        "HSub",
+        parent=small,
+        fontSize=8.5,
+        textColor=colors.HexColor("#6B7280"),
+        spaceAfter=8,
+    )
+    verdict_style = ParagraphStyle(
+        "Verdict",
+        parent=styles["Heading1"],
+        fontName="Helvetica-Bold",
+        fontSize=42,
+        leading=46,
+        alignment=TA_CENTER,
+        textColor=decision_color,
+        spaceBefore=2,
+        spaceAfter=2,
+    )
+    confidence_style = ParagraphStyle(
+        "Confidence",
+        parent=body,
+        fontSize=10,
+        leading=12,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor("#374151"),
+        spaceAfter=8,
+    )
+
+    story: list = []
+
+    story.append(Paragraph("PROMETHEUS · Decision Intelligence", h1))
+    timestamp = datetime.now().strftime("%B %d, %Y · %H:%M")
+    story.append(Paragraph(f"Generated {timestamp}", h_sub))
+
+    question_text = html.escape(research.get("question") or result.get("question") or "")
+    if question_text:
+        story.append(Paragraph(f"<b>Question.</b> {question_text}", body))
+        story.append(Spacer(1, 10))
+
+    verdict_table = Table(
+        [
+            [Paragraph(decision_value, verdict_style)],
+            [Paragraph(f"Confidence: {confidence}% · Deterministic check: {breakdown['deterministic']}%", confidence_style)],
+        ],
+        colWidths=[doc.width],
+    )
+    verdict_table.setStyle(
+        TableStyle(
+            [
+                ("BOX", (0, 0), (-1, -1), 1.2, decision_color),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFFBEB")),
+                ("TOPPADDING", (0, 0), (-1, -1), 14),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
+                ("LEFTPADDING", (0, 0), (-1, -1), 14),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+            ]
+        )
+    )
+    story.append(verdict_table)
+    story.append(Spacer(1, 10))
+
+    story.append(Paragraph("Rationale", label))
+    story.append(Paragraph(html.escape(decision.get("rationale") or ""), body))
+
+    story.append(Paragraph("Primary condition", label))
+    story.append(Paragraph(html.escape(decision.get("primary_condition") or ""), body))
+
+    story.append(Paragraph("Revisit if", label))
+    story.append(Paragraph(html.escape(decision.get("revisit_trigger") or ""), body))
+
+    story.append(Spacer(1, 8))
+    score_data = [
+        [
+            Paragraph(
+                f"<b>Threat {strategy.get('threat_score', '-')}/10.</b> "
+                f"{html.escape(strategy.get('threat_score_rationale') or '')}",
+                small,
+            ),
+            Paragraph(
+                f"<b>Opportunity {strategy.get('opportunity_score', '-')}/10.</b> "
+                f"{html.escape(strategy.get('opportunity_score_rationale') or '')}",
+                small,
+            ),
+        ]
+    ]
+    score_table = Table(score_data, colWidths=[doc.width / 2 - 6, doc.width / 2 - 6])
+    score_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#FEF2F2")),
+                ("BACKGROUND", (1, 0), (1, 0), colors.HexColor("#ECFDF5")),
+                ("BOX", (0, 0), (0, 0), 0.6, colors.HexColor("#FCA5A5")),
+                ("BOX", (1, 0), (1, 0), 0.6, colors.HexColor("#86EFAC")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    story.append(score_table)
+
+    recs = strategy.get("recommendations") or []
+    if recs:
+        story.append(Paragraph("Recommendations", label))
+        for index, rec in enumerate(recs[:3], start=1):
+            story.append(Paragraph(f"{index}. {html.escape(str(rec))}", body))
+
+    if disagreements:
+        story.append(Paragraph("Disagreement exchange", label))
+        rows = [
+            [
+                Paragraph("<b>Scout claimed</b>", small),
+                Paragraph("<b>Challenger objected</b>", small),
+                Paragraph("<b>Resolved as</b>", small),
+            ]
+        ]
+        for row in disagreements[:3]:
+            rows.append(
+                [
+                    Paragraph(html.escape(row.get("scout_claim") or ""), small),
+                    Paragraph(html.escape(row.get("challenger_objection") or ""), small),
+                    Paragraph(html.escape(row.get("strategist_resolution") or ""), small),
+                ]
+            )
+        col_w = doc.width / 3
+        disagreement_table = Table(rows, colWidths=[col_w] * 3, repeatRows=1)
+        disagreement_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#FEF3C7")),
+                    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D4D4D8")),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+        story.append(disagreement_table)
+
+    if citations:
+        story.append(Paragraph(f"{len(citations)} sources scanned by Scout", label))
+        for citation in citations[:8]:
+            uri = html.escape(citation.get("uri") or "")
+            title = html.escape(citation.get("title") or uri)
+            story.append(Paragraph(f"· <link href=\"{uri}\">{title}</link>", small))
+        if len(citations) > 8:
+            story.append(Paragraph(f"+{len(citations) - 8} more sources", small))
+
+    story.append(Spacer(1, 12))
+    story.append(
+        Paragraph(
+            f"Calibration · Base 90 − {breakdown['unresolved_penalty']} unresolved − "
+            f"{breakdown['resolved_penalty']} resolved = {breakdown['deterministic']}% deterministic · "
+            f"LLM said {breakdown['llm']}%.",
+            small,
+        )
+    )
+
+    doc.build(story)
+    return buffer.getvalue()
+
+
+def render_verdict_pdf_button(result: dict | None) -> None:
+    """Surface a download button alongside the verdict card when results exist."""
+    if not result:
+        return
+    decision = (result.get("decision") or {}).get("decision") or "verdict"
+    safe = re.sub(r"[^A-Za-z0-9-]+", "-", decision.lower()).strip("-") or "verdict"
+    pdf_bytes = build_verdict_pdf(result)
+    st.download_button(
+        label=f"Download {decision} brief (PDF)",
+        data=pdf_bytes,
+        file_name=f"prometheus-{safe}-{datetime.now().strftime('%Y%m%d-%H%M')}.pdf",
+        mime="application/pdf",
+        use_container_width=True,
+    )
+
+
 def render_decision_card(placeholder, result: dict) -> None:
     decision = result["decision"]
     border_color, text_color, glow = decision_colors(decision["decision"])
@@ -1393,6 +1660,7 @@ def progressive_display(
     decision_placeholder,
     disagreement_placeholder,
     verdict_placeholder,
+    pdf_placeholder,
     strategic_brief_placeholder,
 ) -> None:
     st.session_state.final_result = result
@@ -1450,6 +1718,8 @@ def progressive_display(
         st.session_state.decision_text,
     )
     render_decision_card(verdict_placeholder, result)
+    with pdf_placeholder.container():
+        render_verdict_pdf_button(result)
     render_strategic_brief(strategic_brief_placeholder, result)
 
 
@@ -1601,6 +1871,7 @@ strategist_placeholder = st.empty()
 connector_strategist_to_decision = st.empty()
 decision_placeholder = st.empty()
 verdict_placeholder = st.empty()
+pdf_placeholder = st.empty()
 strategic_brief_placeholder = st.empty()
 spinner_placeholder = st.empty()
 
@@ -1652,6 +1923,7 @@ if pending_action == "live":
             decision_placeholder,
             disagreement_placeholder,
             verdict_placeholder,
+            pdf_placeholder,
             strategic_brief_placeholder,
         )
     except Exception as exc:
@@ -1669,12 +1941,15 @@ elif pending_action == "cache" and pending_result:
         decision_placeholder,
         disagreement_placeholder,
         verdict_placeholder,
+        pdf_placeholder,
         strategic_brief_placeholder,
     )
 
 elif st.session_state.final_result:
     render_disagreement_table(disagreement_placeholder, st.session_state.final_result)
     render_decision_card(verdict_placeholder, st.session_state.final_result)
+    with pdf_placeholder.container():
+        render_verdict_pdf_button(st.session_state.final_result)
     render_strategic_brief(strategic_brief_placeholder, st.session_state.final_result)
 
 
