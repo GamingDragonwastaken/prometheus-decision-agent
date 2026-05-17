@@ -665,19 +665,35 @@ def fetch_scenarios() -> list[dict]:
     try:
         with open("configs/scenarios.yaml", encoding="utf-8") as scenario_file:
             local_data = yaml.safe_load(scenario_file) or {}
-        questions_by_id = {
-            scenario["id"]: scenario.get("question", "")
-            for scenario in local_data.get("scenarios", [])
-        }
+    except Exception:
+        return scenarios
+
+    local_scenarios = local_data.get("scenarios", []) or []
+    local_by_id = {scenario["id"]: scenario for scenario in local_scenarios}
+
+    # If backend was reachable, enrich its response with local question text.
+    # If backend was unreachable, fall back to local YAML so the dropdown still
+    # works in cache-only / offline-demo mode.
+    if scenarios:
         return [
             {
                 **scenario,
-                "question": scenario.get("question") or questions_by_id.get(scenario.get("id"), ""),
+                "question": (
+                    scenario.get("question")
+                    or local_by_id.get(scenario.get("id"), {}).get("question", "")
+                ),
             }
             for scenario in scenarios
         ]
-    except Exception:
-        return scenarios
+
+    return [
+        {
+            "id": scenario["id"],
+            "label": scenario.get("label", scenario["id"]),
+            "question": scenario.get("question", ""),
+        }
+        for scenario in local_scenarios
+    ]
 
 
 @st.cache_data(ttl=60)
