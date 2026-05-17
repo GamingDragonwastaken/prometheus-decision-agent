@@ -472,6 +472,59 @@ st.markdown(
         .calib-delta-close { color: #9CA3AF; }
         .calib-delta-far   { color: #F59E0B; }
 
+        .health-strip {
+            display: flex;
+            justify-content: center;
+            margin: -6px 0 14px;
+        }
+
+        .health-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 14px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.025);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            color: #D4D4D4;
+        }
+
+        .health-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            flex: 0 0 7px;
+        }
+
+        .health-dot-online {
+            background: #22C55E;
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
+            animation: prom-pulse 2.6s ease-in-out infinite;
+        }
+
+        .health-dot-offline {
+            background: #737373;
+            box-shadow: 0 0 0 3px rgba(115, 115, 115, 0.12);
+        }
+
+        .health-label {
+            color: #FFFFFF;
+            letter-spacing: 0.06em;
+        }
+
+        .health-meta {
+            color: #9CA3AF;
+            font-weight: 500;
+            font-family: "JetBrains Mono", monospace;
+            font-size: 0.72rem;
+            padding-left: 8px;
+            border-left: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
         .exchange-callout-sub {
             color: #A3A3A3;
             font-size: 0.86rem;
@@ -889,6 +942,42 @@ def fetch_history() -> list[dict]:
         return response.json()
     except Exception:
         return []
+
+
+@st.cache_data(ttl=30)
+def fetch_health() -> dict:
+    """Probe the backend /health endpoint. Cached so it doesn't fire on every rerun."""
+    try:
+        response = httpx.get(f"{BACKEND_URL}/health", timeout=2)
+        response.raise_for_status()
+        body = response.json()
+        return {
+            "online": True,
+            "model": body.get("model", "gemini"),
+            "agents": body.get("agents", 4),
+        }
+    except Exception:
+        return {"online": False, "model": "offline", "agents": 0}
+
+
+def render_health_pill_html(health: dict) -> str:
+    online = bool(health.get("online"))
+    dot_class = "health-dot-online" if online else "health-dot-offline"
+    status_label = "Backend live" if online else "Cache-only mode"
+    model = html.escape(str(health.get("model") or "gemini"))
+    agents = int(health.get("agents") or 0)
+    detail = (
+        f"<span class=\"health-meta\">{model} · {agents} agents</span>"
+        if online
+        else "<span class=\"health-meta\">backend unreachable</span>"
+    )
+    return (
+        f'<div class="health-pill" title="{status_label}">'
+        f'<span class="health-dot {dot_class}"></span>'
+        f'<span class="health-label">{status_label}</span>'
+        f"{detail}"
+        f"</div>"
+    )
 
 
 def clear_results() -> None:
@@ -1788,6 +1877,10 @@ st.markdown(
         <p>AUTONOMOUS COMPETITIVE DECISION INTELLIGENCE</p>
     </div>
     """,
+    unsafe_allow_html=True,
+)
+st.markdown(
+    f'<div class="health-strip">{render_health_pill_html(fetch_health())}</div>',
     unsafe_allow_html=True,
 )
 st.divider()
